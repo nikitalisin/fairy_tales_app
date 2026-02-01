@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -12,6 +12,7 @@ import 'package:fairy_tales_app/controllers/story_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized(); // Initialize media_kit
   await dotenv.load(fileName: ".env");
   runApp(
     MultiProvider(
@@ -57,6 +58,7 @@ class _StoryScreenState extends State<StoryScreen> {
   final TextEditingController _promptController = TextEditingController();
   XFile? _imageFile;
   final ImagePicker _picker = ImagePicker();
+  int _sceneCount = 3; // Default scene count
 
   @override
   void dispose() {
@@ -166,11 +168,150 @@ class _StoryScreenState extends State<StoryScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 25),
+
+                  // Scene Count Selector
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.black38,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.amberAccent.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          '📜 Chapters of Legend',
+                          style: TextStyle(
+                            color: Colors.amberAccent.withOpacity(0.8),
+                            fontSize: 14,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [2, 3, 4, 5].map((count) {
+                            final isSelected = _sceneCount == count;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              child: GestureDetector(
+                                onTap: () => setState(() => _sceneCount = count),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeOutCubic,
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isSelected ? Colors.amber.withOpacity(0.2) : Colors.transparent,
+                                    border: Border.all(
+                                      color: isSelected ? Colors.amber : Colors.white24,
+                                      width: isSelected ? 2 : 1,
+                                    ),
+                                    boxShadow: isSelected
+                                        ? [BoxShadow(color: Colors.amber.withOpacity(0.3), blurRadius: 12, spreadRadius: 2)]
+                                        : null,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '$count',
+                                      style: TextStyle(
+                                        color: isSelected ? Colors.amber : Colors.white54,
+                                        fontSize: 20,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(delay: 300.ms, duration: 600.ms),
+
+                  const SizedBox(height: 25),
 
                   // Action Button or Loading
-                  // Action Button or Loading
-                  if (controller.isProcessing) ...[
+                  // --- Progressive Image Generation ---
+                  if (controller.isGeneratingImages) ...[
+                    // Show images appearing one by one
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.amberAccent.withOpacity(0.5)),
+                      ),
+                      child: Column(
+                        children: [
+                          // Progress indicator
+                          Text(
+                            controller.statusMessage,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic, color: Colors.amber),
+                          ),
+                          const SizedBox(height: 16),
+                          // Progress bar
+                          LinearProgressIndicator(
+                            value: controller.generatedImageUrls.length / controller.totalScenes,
+                            backgroundColor: Colors.white12,
+                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${controller.generatedImageUrls.length} / ${controller.totalScenes} scenes painted',
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                          const SizedBox(height: 20),
+                          // Grid of generated images
+                          if (controller.generatedImageUrls.isNotEmpty) ...[
+                            SizedBox(
+                              height: 200,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: controller.totalScenes,
+                                itemBuilder: (context, index) {
+                                  final isGenerated = index < controller.generatedImageUrls.length;
+                                  final isGenerating = index == controller.generatedImageUrls.length;
+
+                                  return Container(
+                                    width: 150,
+                                    margin: const EdgeInsets.only(right: 12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isGenerating ? Colors.amber : Colors.white24,
+                                        width: isGenerating ? 2 : 1,
+                                      ),
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(11),
+                                      child: isGenerated
+                                          ? Image.network(
+                                              controller.generatedImageUrls[index],
+                                              fit: BoxFit.cover,
+                                            ).animate().fadeIn(duration: 600.ms).scale(begin: const Offset(0.8, 0.8))
+                                          : Container(
+                                              color: Colors.black38,
+                                              child: Center(
+                                                child: isGenerating
+                                                    ? const CircularProgressIndicator(color: Colors.amber, strokeWidth: 2)
+                                                    : Icon(Icons.image_outlined, color: Colors.white24, size: 40),
+                                              ),
+                                            ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ] else if (controller.isProcessing) ...[
                     const CircularProgressIndicator(color: Colors.amber),
                     const SizedBox(height: 20),
                     Text(
@@ -178,8 +319,8 @@ class _StoryScreenState extends State<StoryScreen> {
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
                     ).animate(onPlay: (c) => c.repeat()).fade(),
-                    
-                  // --- NEW: Story Text Approval Step ---
+
+                  // --- Story Text Approval Step ---
                   ] else if (controller.isStoryReady && controller.storyData != null) ...[
                      Container(
                        height: 300,
@@ -268,38 +409,32 @@ class _StoryScreenState extends State<StoryScreen> {
                      ),
 
                   ] else if (controller.hasVideos) ...[
-                     SizedBox(
-                       height: 400,
-                       child: PageView.builder(
-                         itemCount: controller.generatedVideoPaths.length,
-                         itemBuilder: (context, index) {
-                           return Card(
-                             color: Colors.black54,
-                             child: Column(
-                               children: [
-                                 Expanded(
-                                   child: Chewie(
-                                     controller: ChewieController(
-                                       videoPlayerController: kIsWeb 
-                                         ? VideoPlayerController.networkUrl(Uri.parse(controller.generatedVideoPaths[index]))
-                                         : VideoPlayerController.file(File(controller.generatedVideoPaths[index]))
-                                         ..initialize(),
-                                       autoPlay: index == 0,
-                                       looping: true,
-                                       showControls: true, 
-                                     ),
-                                   ),
-                                 ),
-                                 Padding(
-                                   padding: const EdgeInsets.all(8.0),
-                                   child: Text('Scene ${index + 1}', style: const TextStyle(color: Colors.amber)),
-                                 ),
-                               ],
-                             ),
-                           );
-                         },
+                     // Final merged video
+                     Container(
+                       decoration: BoxDecoration(
+                         borderRadius: BorderRadius.circular(15),
+                         border: Border.all(color: Colors.amberAccent, width: 2),
+                         boxShadow: [
+                           BoxShadow(color: Colors.amber.withOpacity(0.3), blurRadius: 20, spreadRadius: 2),
+                         ],
                        ),
-                     ),
+                       child: ClipRRect(
+                         borderRadius: BorderRadius.circular(13),
+                         child: SizedBox(
+                           height: 350,
+                           child: _FinalVideoPlayer(videoPath: controller.finalVideoPath!),
+                         ),
+                       ),
+                     ).animate().fadeIn(duration: 800.ms).scale(begin: const Offset(0.95, 0.95)),
+                     const SizedBox(height: 20),
+                     Text(
+                       '✨ Your Fairy Tale is Complete! ✨',
+                       style: TextStyle(
+                         color: Colors.amberAccent,
+                         fontSize: 18,
+                         fontWeight: FontWeight.bold,
+                       ),
+                     ).animate().shimmer(duration: 2000.ms),
                      const SizedBox(height: 20),
                      ElevatedButton.icon(
                       onPressed: () {
@@ -309,16 +444,17 @@ class _StoryScreenState extends State<StoryScreen> {
                            controller.reset();
                          });
                       },
-                      icon: const Icon(Icons.refresh),
+                      icon: const Icon(Icons.auto_awesome),
                       label: const Text('Create Another Tale'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.amber,
                         foregroundColor: Colors.black87,
+                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                       ),
                      ),
                   ] else ...[
                      ElevatedButton(
-                       onPressed: () => controller.generateStoryOnly(_promptController.text, _imageFile!),
+                       onPressed: () => controller.generateStoryOnly(_promptController.text, _imageFile!, sceneCount: _sceneCount),
                        style: ElevatedButton.styleFrom(
                          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                          backgroundColor: Colors.amber,
@@ -362,6 +498,59 @@ class _StoryScreenState extends State<StoryScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Powerful video player using media_kit (libmpv based)
+class _FinalVideoPlayer extends StatefulWidget {
+  final String videoPath;
+
+  const _FinalVideoPlayer({required this.videoPath});
+
+  @override
+  State<_FinalVideoPlayer> createState() => _FinalVideoPlayerState();
+}
+
+class _FinalVideoPlayerState extends State<_FinalVideoPlayer> {
+  late final Player _player;
+  late final VideoController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = Player();
+    _controller = VideoController(_player);
+
+    // Open the video
+    final media = kIsWeb
+        ? Media(widget.videoPath)
+        : Media('file://${widget.videoPath}');
+
+    _player.open(media);
+    _player.setPlaylistMode(PlaylistMode.loop); // Loop the fairy tale
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: ThemeData.dark().copyWith(
+        colorScheme: const ColorScheme.dark(
+          primary: Colors.amber,
+          secondary: Colors.amberAccent,
+        ),
+      ),
+      child: Video(
+        controller: _controller,
+        controls: AdaptiveVideoControls,
+        fill: Colors.black,
       ),
     );
   }
